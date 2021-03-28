@@ -18,8 +18,34 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+
+Route::group([
+    'middleware' => 'roles',
+    'roles' => ['admin']
+], function() {
+
+    Route::get('baza', [
+        'baza' => 'BazaController@index',
+        'as' => 'baza.index'
+]);
+
+ });
+ 
  
 Route::get('/baza', [BazaController::class, 'index']);
+
+Auth::routes();
+
+Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+Auth::routes();
+
+Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+Auth::routes();
+
+Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
