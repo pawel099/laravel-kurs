@@ -20,20 +20,21 @@ Route::get('/', function () {
 
 
 Route::group([
-    'middleware' => 'roles',
-    'roles' => ['admin']
+    'middleware' => 'rola',
+    'rola' => ['Admin']
 ], function() {
-
-    Route::get('baza', [
-        'baza' => 'BazaController@index',
-        'as' => 'baza.index'
-]);
-
- });
  
- 
+    
 Route::get('/baza', [BazaController::class, 'index']);
 
+
+});
+
+
+
+
+
+
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
@@ -41,6 +42,12 @@ Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+Auth::routes();
+
+Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+
 
 Auth::routes();
 
