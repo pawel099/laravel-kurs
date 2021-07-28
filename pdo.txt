@@ -1,0 +1,506 @@
+﻿<?php
+ 
+ 
+   try
+   {
+      $pdo = new PDO('mysql:host=localhost;dbname=produkty', 'root', 'root');
+      echo 'Połączenie nawiązane!';
+   }
+   catch(PDOException $e)
+   {
+      echo 'Połączenie nie mogło zostać utworzone: ' . $e->getMessage();
+   }
+?>
+Nawiązywanie połączenia polega po prostu na utworzeniu obiektu klasy PDO. Jako parametry startowe podajemy:
+DSN - specjalny ciąg znaków identyfikujący rodzaj serwera DB (np. mysql), host na jakim jest ona uruchomiona (dla nas localhost) oraz nazwę bazy, z którą chcemy się połączyć. Opcjonalnie można dodać także parametr port(przykład poniżej) Inne serwery DB mogą wymagać innych parametrów połączeń; po szczegóły odsyłamy do dokumentacji PHP.
+<?php
+$mysql_host = 'localhost'; //lub jakiś adres: np sql.nazwa_bazy.nazwa.pl
+$port = '3307'; //domyślnie jest to port 3306
+$username = 'login';
+$password = 'hasło';
+$database = 'nazwa_bazy'; //'produkty'
+ 
+try{
+        $pdo = new PDO('mysql:host='.$mysql_host.';dbname='.$database.';port='.$port, $username, $password );
+        echo 'Połączenie nawiązane!';
+}catch(PDOException $e){
+        echo 'Połączenie nie mogło zostać utworzone.<br />';
+}
+?>
+nazwa użytkownika
+hasło użytkownika
+Host, nazwę użytkownika i hasło powinieneś dostać od swojego hostingu, kiedy będziesz chciał umieścić swoją stronę. Jeżeli podczas nawiązywania połączenia wystąpi błąd, zostanie on zgłoszony jako wyjątek PDOException, który musimy przechwycić (to ważne - jeśli wyjątek nie zostanie przechwycony, domyślny komunikat o błędzie wygenerowany przez PHP ujawni nazwę użytkownika i nazwę bazy!).
+Chcąc ustawić od razu system porównań dla bazy danych wystarczy użyć takiego połączenia:
+<?php
+ 
+  try
+   {
+      $pdo = new PDO('mysql:host=localhost;dbname=produkty;encoding=utf8', 'root', 'root');
+      echo 'Połączenie nawiązane!';
+   }
+   catch(PDOException $e)
+   {
+      echo 'Połączenie nie mogło zostać utworzone: ' . $e->getMessage();
+   }
+?>
+W miejsce utf8 wstaw swoje kodowanie i voila! Już nie musisz pamiętać o zmianie kodowania na UTF-8 dla przykładu. W ten sposób można przekazać jeszcze inne zapytania już zaraz po połączeniu.
+Pobieranie danych[edytuj]
+Pobieranie danych w sterownikach baz danych realizuje się w następujący sposób: najpierw wysyłamy zapytanie i uzyskujemy od serwera zbiór wyników. Przelatując po nim pętlą, otrzymujemy kolejne rekordy w postaci tablic. W bibliotece PDO zbiorem wyniku jest obiekt klasy PDOStatement. Naraz możemy mieć otwarty tylko jeden zbiór wyników. Zabezpiecza to przed próbami tworzenia zapytań rekurencyjnych oraz wynika ze specyfiki pracy bibliotek komunikujących się z serwerem. W starszych bibliotekach ograniczenia takiego nie było dzięki emulacji, która jednak zmniejszała wydajność. Przyjrzyjmy się, jak możemy pobrać zawartość tabeli produkty:
+<?php
+ 
+   try
+   {
+      $pdo = new PDO('mysql:host=localhost;dbname=produkty', 'root', 'root');
+      $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+      $stmt = $pdo->query('SELECT id, nazwa, opis FROM produkty');
+      echo '<ul>';
+      foreach($stmt as $row)
+      {
+          echo '<li>'.$row['nazwa'].': '.$row['opis'].'</li>';
+      }
+      $stmt->closeCursor();
+      echo '</ul>';
+   }
+   catch(PDOException $e)
+   {
+      echo 'Połączenie nie mogło zostać utworzone: ' . $e->getMessage();
+   }
+?>
+Metoda query() zwraca obiekt zbioru wyników odpowiadający wykonanemu zapytaniu (zauważ, że w tym przypadku nie kończymy go średnikiem!). Jedną z technik uzyskania kolejnych rekordów jest przepuszczenie tego obiektu przez pętlę foreach. Kolejne rekordy zostaną zapisane do tablicy asocjacyjnej $row, z której możemy pobrać wyniki. Po zakończeniu pobierania niezbędne jest zamknięcie zbioru wyników poleceniem closeCursor() - inaczej nie będziemy w stanie wysłać następnego zapytania.
+Zauważ, że zaraz po połączeniu się z bazą danych korzystamy z metody setAttribute(). Pozwala ona skonfigurować niektóre aspekty pracy z biblioteką PDO - w tym przypadku żądamy, aby ewentualne błędy w zapytaniach raportowane były jako wyjątki.
+Powyższy przykład można zapisać także w inny sposób:
+<?php
+ 
+   try
+   {
+      $pdo = new PDO('mysql:host=localhost;dbname=produkty', 'root', 'root');
+      $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+      $stmt = $pdo -> query('SELECT id, nazwa, opis FROM produkty');
+      echo '<ul>';
+      while($row = $stmt->fetch())
+      {
+          echo '<li>'.$row['nazwa'].': '.$row['opis'].'</li>';
+      }
+      $stmt->closeCursor();
+      echo '</ul>';
+   }
+   catch(PDOException $e)
+   {
+      echo 'Połączenie nie mogło zostać utworzone: ' . $e->getMessage();
+   }
+?>
+W tym wypadku wykorzystaliśmy pętlę while i jawnie zażądaliśmy zwrócenia rekordu metodą fetch(). Jest ona, wbrew pozorom bardzo użyteczna - można ją wywołać wszędzie, np. w instrukcji if (sytuacja, gdy zawsze pobieramy jeden rekord), a także ustawić tryb pobierania.
+Uwaga! PHP Data Objects ma czasem problemy z działaniem z MySQL 4.1. Aby uniknąć problemów na tej wersji (sporo firm hostingowych wciąż ją oferuje), musisz pamiętać o tym, aby po zamknięciu zbioru wyników metodą closeCursor() dodatkowo ręcznie skasować obiekt $stmt:
+unset($stmt);
+Inaczej próba przypisania do niej nowego zbioru wyników spowoduje wygenerowanie przez MySQL komunikatu General Error 2050.
+Aktualizacja danych[edytuj]
+Zapytania typu INSERT czy UPDATE służące do modyfikacji zawartości bazy lub inne, niezwracające zbioru wyników, wysyła się za pomocą metody exec(). Wynikiem jej działania jest liczba określająca ilość zmodyfikowanych rekordów. W poniższym przykładzie zakodujemy dodawanie pewnego konkretnego produktu do naszej listy produktów:
+<?php
+ 
+        try
+        {
+                $pdo = new PDO('mysql:host=localhost;dbname=produkty;port=3305', 'root', 'root');
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+                $ilosc = $pdo->exec('INSERT INTO `produkty` (`nazwa`, `opis`, `ilosc`, `cena`, `jakosc`)        VALUES(
+                        \'Miotacz ognia na dezodorant\',
+                        \'Rewelacyjny miotacz ognia dla kazdej domowej gospodyni!
+                        Nie martw sie o paliwo - wystarczy zwykly dezodorant!\',
+                        \'54\',
+                        \'40.99\',
+                        \'5\')');
+ 
+                if($ilosc > 0)
+                {
+                        echo 'Dodano: '.$ilosc.' rekordow';
+                }
+                else
+                {
+                        echo 'Wystąpił błąd podczas dodawania rekordów!';
+                }
+        }
+        catch(PDOException $e)
+        {
+                echo 'Wystąpił błąd biblioteki PDO: ' . $e->getMessage();
+        }
+?>
+Podpinanie[edytuj]
+Rzadko kiedy zdarza się, aby wszystkie informacje potrzebne do zmodyfikowania bazy były na sztywno zakodowane w zapytaniu tak, jak to zrobiliśmy w powyższym przykładzie. W codziennej praktyce modyfikujemy dane za pomocą formularzy, ikonek podpowiadających, co trzeba zmienić i jak. Rozwiązanie jest pozornie banalne: składamy zapytanie z predefiniowanych części, którymi opakowujemy dane z formularza, a później wysyłamy ten miks do bazy. Ilustruje to kolejny przykład, który udostępnia prosty formularz do dodawania nowych produktów:
+<?php
+ 
+        try
+        {
+                if($_SERVER['REQUEST_METHOD'] == 'POST')
+                {       
+                        $pdo = new PDO('mysql:host=localhost;dbname=produkty;port=3305', 'root', 'root');
+ 
+                        $ilosc = $pdo -> exec('INSERT INTO `produkty` (`nazwa`, `opis`, `ilosc`, `cena`, `jakosc`)      VALUES(
+                                \''.$_POST['nazwa'].'\',
+                                \''.$_POST['opis'].'\',
+                                \''.$_POST['ilosc'].'\',
+                                \''.$_POST['cena'].'\',
+                                \''.$_POST['jakosc'].'\')');
+ 
+                        if($ilosc > 0)
+                        {
+                                echo 'Pomyślnie dodano: '.$ilosc.' rekordów';
+                        }
+                        else
+                        {
+                                echo 'Wystąpił błąd podczas dodawania rekordów!';
+                        }
+                }
+                else
+                {
+                        echo '
+                        <form method="post" action="pdo_5.php">
+                        <p>Nazwa: <input type="text" name="nazwa"/></p>
+                        <p>Opis: <input type="text" name="opis"/></p>
+                        <p>Ilosc: <input type="text" name="ilosc"/></p>
+                        <p>Cena: <input type="text" name="cena"/></p>
+                        <p>Jakosc: <select name="jakosc">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        </select></p>
+                        <p><input type="submit" value="Dodaj"/></p>
+                        </form>
+                        ';      
+                }
+        }
+        catch(PDOException $e)
+        {
+                echo 'Wystapił blad biblioteki PDO: ' . $e->getMessage();
+        }
+?>
+Kiedy został nadesłany formularz (metoda POST), nawiązywane jest połączenie z bazą. W szkielet zapytania wstawiamy wprowadzone przez użytkownika dane, wykorzystując zwyczajny operator łączenia ciągów. Później metoda exec() umieszcza nam nowy rekord w bazie. Na pierwszy rzut oka wszystko wygląda wspaniale - mamy formularz, redaktorzy mogą dodawać produkty, a internauci je oglądać. Lecz pewnego dnia jeden z redaktorów zgłasza problem: nie może wpisać do opisu produktu apostrofy, gdyż skrypt generuje wtedy jakieś tajemnicze błędy. Co jest grane? Testujemy kopię skryptu na lokalnym komputerze i działa, ale na właściwym serwerze WWW już nie. Przyczyną problemu jest złamanie dwóch podstawowych zasad obsługi formularzy:
+Nigdy nie ufaj danym zewnętrznym
+Nigdy nie ufaj magic quotes
+Efekt jest taki, że stworzyliśmy aplikację podatną na włamania typu SQL Injection, które polegają na wykorzystaniu dziur w kontroli danych z formularzy. Zauważ, jak bezbronny jest nasz formularz: baza danych wymaga, aby ilość była liczbą. Gdzie to sprawdzamy w skrypcie? Nigdzie. Gdy jakiś inteligent wpisze nam zamiast ilości "miecio jest niepoważny", skrypt beztrosko umieści to w zapytaniu nie patrząc na sens tego, co robi. Co więcej, zwróć uwagę na pewną rzecz: w języku SQL znak apostrofu jest czymś więcej, niż tylko znakiem - kończy on lub zaczyna sekwencję ciągu tekstowego. Dlatego wprowadzając jakikolwiek tekst, który ma zawierać apostrofy, musimy poddać je zabiegowi escapingu, czyli mówiąc po polsku - poprzedzić znakiem backslash, aby MySQL wiedział, że są one integralną częścią tekstu i nie kończą wprowadzanej sekwencji. Kiedy PHP był jeszcze niewielkim projektem, ktoś wpadł na pomysł wspomożenia programistów i wymyślił tzw. magic quotes. Opcja ta, jeżeli jest włączona, powoduje, że we wszystkich danych z tablic $_GET, $_POST oraz $_COOKIE apostrofy są automatycznie poprzedzane backslashem, dzięki czemu nie trzeba się tym zajmować samodzielnie. Brzmi ciekawie? Niezupełnie! Zwróćmy uwagę, że nie tylko baza danych może służyć do przechowywania informacji. Niektóre z nich ktoś zechce umieścić w pliku i wtedy z kolei musi się sam tych niepotrzebnych backslashów pozbywać. Kolejną kontrowersyjną rzeczą dotyczącą magic quotes jest fakt, że nie wszystkie serwery miały tę opcję włączoną, tak samo nie wszyscy programiści wiedzieli, że coś takiego w ogóle istnieje. Czy widziałeś w sieci serwisy, gdzie apostrofy w artykułach poprzedzane były setkami backslashów? To właśnie efekt tego - programista miał u siebie w domu wyłączoną opcję magic quotes, więc ręcznie dodawał sobie backslashe przy danych umieszczanych w zapytaniach SQL. Później wrzucił skrypt na serwer, gdzie magic quotes dla odmiany było włączone, przez co backslashe doklejane były dwa razy - jeden z nich faktycznie escape'ował apostrofy, ale drugi był uznawany przez MySQL za integralną część tekstu. Z drugiej strony, jeśli ktoś miał w domu serwer lokalny z włączonymi magicznymi apostrofami, a później wrzucił swoja stronę WWW na serwer bez nich, stawał się łatwym celem dla hackerów, którzy bez trudu mogą włamać się atakiem SQL Injection. Atak ten polega na tym, że skoro apostrof nie jest escape'owany, to jego wprowadzenie tak naprawdę powoduje, że dalsza część ciągu jest uznawana za fragment zapytania! Możemy więc sobie zupełnie legalnie dopisać własne warunki. Wyobraźmy sobie teraz, że ktoś manipuluje w ten sposób zapytaniami związanymi z bezpieczeństwem za pomocą formularza logowania. To nie fikcja: do wyobraźni powinien przemówić ten film (j. ang).
+Ostatecznie sami twórcy PHP doszli do wniosku, że magic quotes jest rozwiązaniem bezsensownym. W tworzonym właśnie PHP 6 tej opcji już nie ma i należy samodzielnie escape'ować wszystkie dane. Jednak póki co pracujemy na PHP 5.1 - choć w tym podręczniku podczas instalacji zalecaliśmy wyłączenie magic quotes, nie mamy pewności, że serwer docelowy dla naszych stron WWW posiada identyczne ustawienia. Jeśli korzystamy z PDO i mechanizmu podpinania, problem nas nie dotyczy, ponieważ biblioteka automatycznie dostosuje się wtedy do ustawień, lecz w każdym innym przypadku powinniśmy zastosować specjalny filtr, który zniweluje nam efekt niewłaściwych ustawień i nada danym pożądaną przez nasz skrypt postać.
+<?php
+        if(version_compare(phpversion(), '6.0.0-dev', '<'))
+        {
+                // Dla PHP 5 i wcześniejszych wyłączmy magic quotes
+ 
+                function removeSlashes(&$value){
+                        if(is_array($value))
+                        {
+                                return array_map('removeSlashes', $value);
+                        }
+                        else
+                        {
+                                return stripslashes($value);
+                        }
+                } // end rmGpc();
+ 
+                set_magic_quotes_runtime(0);
+ 
+                if(get_magic_quotes_gpc())
+                {
+                        $_POST = array_map('removeSlashes', $_POST);
+                        $_GET = array_map('removeSlashes', $_GET);
+                        $_COOKIE = array_map('removeSlashes', $_COOKIE);        
+                }
+        }
+ 
+?>
+Przejdźmy teraz do właściwego tematu niniejszej sekcji. Skoro magic quotes jest wyłączone, rozsądek podpowiada, że dane musimy sami escape'ować. W starych rozszerzeniach do komunikacji z bazą danych służyły do tego specjalne funkcje udostępniane przez sterownik, przez które musieliśmy przepuścić wszystkie dane - nadal jednak konieczne było samodzielne spajanie tego z zapytaniem. PDO promuje filozofię przeniesienia tego zadania na bazę danych, co udostępniają najnowsze biblioteki komunikacji z serwerami DB. W języku polskim proces ten doczekał się niezbyt szczęśliwej nazwy bindowanie od angielskiego określenia data binding, jednak w tym podręczniku będziemy konsekwentnie stosować termin podpinanie, naszym zdaniem znacznie lepiej oddający jego charakter.
+Podpinanie polega na przeniesieniu spajania danych z zapytaniem z języka programowania na serwer DB. Do bazy wysyłamy tutaj tak naprawdę szkielet zapytania ze specjalnymi wstawkami, do których później podpinamy interesujące nas dane za pomocą specjalnej metody, gdzie możemy dodatkowo określić ich typ (tekst, liczba itd.). Zobaczmy, jak wygląda podany na początku przykład przepisany z wykorzystaniem podpinania:
+<?php
+ 
+        try
+        {
+                if($_SERVER['REQUEST_METHOD'] == 'POST')
+                {       
+                        $pdo = new PDO('mysql:host=localhost;dbname=produkty;port=3305', 'root', 'root');
+                        $pdo -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+                        $stmt = $pdo -> prepare('INSERT INTO `produkty` (`nazwa`, `opis`, `ilosc`, `cena`, `jakosc`)    VALUES(
+                                :nazwa,
+                                :opis,
+                                :ilosc,
+                                :cena,
+                                :jakosc)');     // 1
+ 
+                        $stmt -> bindValue(':nazwa', $_POST['nazwa'], PDO::PARAM_STR); // 2
+                        $stmt -> bindValue(':opis', $_POST['opis'], PDO::PARAM_STR);
+                        $stmt -> bindValue(':ilosc', $_POST['ilosc'], PDO::PARAM_INT);
+                        $stmt -> bindValue(':cena', (float)$_POST['cena'], PDO::PARAM_STR);
+                        $stmt -> bindValue(':jakosc', $_POST['jakosc'], PDO::PARAM_INT);
+ 
+                        $ilosc = $stmt -> execute(); // 3
+ 
+                        if($ilosc > 0)
+                        {
+                                echo 'Dodano: '.$ilosc.' rekordow';
+                        }
+                        else
+                        {
+                                echo 'Wystapil blad podczas dodawania rekordow!';
+                        }
+                }
+                else
+                {
+                        echo '
+                        <form method="post" action="pdo_6.php">
+                        <p>Nazwa: <input type="text" name="nazwa"/></p>
+                        <p>Opis: <input type="text" name="opis"/></p>
+                        <p>Ilosc: <input type="text" name="ilosc"/></p>
+                        <p>Cena: <input type="text" name="cena"/></p>
+                        <p>Jakosc: <select name="jakosc">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        </select></p>
+                        <p><input type="submit" value="Dodaj"/></p>
+                        </form>
+                        ';      
+                }
+        }
+        catch(PDOException $e)
+        {
+                echo 'Wystapil blad biblioteki PDO: ' . $e->getMessage();
+        }
+?>
+Opis:
+Na początek wysyłamy do bazy danych szkielet zapytania, wykorzystując metodę prepare(). Zamiast danych, umieszczamy w ich miejscu wstawki, np. :nazwa, :opis. Jako rezultat otrzymujemy obiekt klasy PDOStatement, który wykorzystamy do podpięcia danych.
+Tutaj podpinamy dane z formularza pod konkretne wstawki metodą bindValue() obiektu PDOStatement. Określamy także ich typ: stała PDO::PARAM_STR określa podpinanie danych tekstowych, PDO::PARAM_INT - liczb całkowitych.
+Właściwe wykonanie zapytania metodą execute().
+Podpinanie jest odporne na ataki SQL Injection. MySQL ma jasno określone, co jest danymi, a co zapytaniem i ściśle się tego trzyma. Ponadto jest także wydajniejsze, niż samodzielne spinanie wszystkiego po stronie PHP.
+Szczególnie ciekawa właściwość podpinania polega na możliwości podpięcia kilku zestawów danych do tego samego szkieletu zapytania, dzięki czemu wydajność wzrasta jeszcze bardziej. Zademonstruje to poniższy przykład, w którym rozszerzyliśmy nasz formularz tak, aby naraz można nim było wprowadzać kilka produktów. Gdy zostanie on wysłany, połączymy się z MySQL'em, przekazując szkielet naszego zapytania. Następnie będziemy podpinali do niego dane kolejnych produktów i wykonywali.
+<?php
+ 
+        try
+        {
+                if($_SERVER['REQUEST_METHOD'] == 'POST')
+                {       
+                        $pdo = new PDO('mysql:host=localhost;dbname=produkty;port=3305', 'root', 'root');
+                        $pdo -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+                        $stmt = $pdo -> prepare('INSERT INTO `produkty` (`nazwa`, `opis`, `ilosc`, `cena`, `jakosc`)    VALUES(
+                                :nazwa,
+                                :opis,
+                                :ilosc,
+                                :cena,
+                                :jakosc)'); // 1
+ 
+                        $ilosc = 0;
+                        foreach($_POST['produkty'] as $produkt)
+                        {
+                                if(strlen($produkt['nazwa']) > 0)
+                                {
+                                        $stmt -> bindValue(':nazwa', $produkt['nazwa'], PDO::PARAM_STR); // 2
+                                        $stmt -> bindValue(':opis', $produkt['opis'], PDO::PARAM_STR);
+                                        $stmt -> bindValue(':ilosc', $produkt['ilosc'], PDO::PARAM_INT);
+                                        $stmt -> bindValue(':cena', (float)$produkt['cena'], PDO::PARAM_STR);
+                                        $stmt -> bindValue(':jakosc', $produkt['jakosc'], PDO::PARAM_INT);
+ 
+                                        $ilosc += $stmt -> execute(); // 3
+                                }                       
+                        }
+ 
+                        if($ilosc > 0)
+                        {
+                                echo 'Dodano: '.$ilosc.' rekordow';
+                        }
+                        else
+                        {
+                                echo 'Wystapil blad podczas dodawania rekordow!';
+                        }
+                }
+                else
+                {
+                        echo '<form method="post" action="pdo_7.php">';
+                        for($i = 1; $i <= 4; $i++)
+                        {
+                                echo '<hr/>
+                                        <p>Nazwa: <input type="text" name="produkty['.$i.'][nazwa]"/></p>
+                                        <p>Opis: <input type="text" name="produkty['.$i.'][opis]"/></p>
+                                        <p>Ilosc: <input type="text" name="produkty['.$i.'][ilosc]"/></p>
+                                        <p>Cena: <input type="text" name="produkty['.$i.'][cena]"/></p>
+                                        <p>Jakosc: <select name="produkty['.$i.'][jakosc]">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        </select></p>';
+                        }
+                        echo '<p><input type="submit" value="Dodaj"/></p></form>';
+                }
+        }
+        catch(PDOException $e)
+        {
+                echo 'Wystapil blad biblioteki PDO: ' . $e->getMessage();
+        }
+?>
+Opis:
+Szkielet zapytania wysyłany tylko raz.
+Zestawy danych ładowane są w pętli.
+W pętli wykonujemy też metodę execute().
+Podpinanie nie ogranicza się tylko do zapytań typu INSERT. Z powodzeniem można stosować je także przy SELECT. Napiszemy teraz skrypt wyświetlający listę produktów oraz umożliwiający nam zobaczenie szczegółów każdego z nich. Dlatego do drugiego zapytania, pobierającego szczegółowe informacje, musimy podpiąć ID produktu, który chcemy obejrzeć.
+<?php
+ 
+        try
+        {
+                $pdo = new PDO('mysql:host=localhost;dbname=produkty;port=3305', 'root', 'root');
+                $pdo -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+                $stmt = $pdo -> query('SELECT id, nazwa FROM produkty ORDER BY id');
+                echo '<ul>';
+                while($row = $stmt -> fetch())
+                {
+                        echo '<li><a href="pdo_8.php?id='.$row['id'].'">'.$row['nazwa'].'</a></li>';            
+                }
+                $stmt -> closeCursor();
+                echo '</ul>';
+ 
+                if(isset($_GET['id'])) // 1
+                {
+                        $stmt = $pdo -> prepare('SELECT `nazwa`, `opis`, `ilosc`, `cena`, `jakosc` FROM `produkty` WHERE `id` = :id'); // 2
+                        $stmt -> bindValue(':id', $_GET['id'], PDO::PARAM_INT);
+                        $stmt -> execute(); // 3
+ 
+                        if($details = $stmt -> fetch()) // 4
+                        {
+                                echo '<hr/>
+                                <p><b>Nazwa:</b> '.$details['nazwa'].'</p>
+                                <p><b>Opis:</b> '.$details['opis'].'</p>
+                                <p><b>Ilosc:</b> '.$details['ilosc'].'</p>
+                                <p><b>Cena:</b> '.$details['cena'].'</p>
+                                <p><b>Jakosc:</b> '.$details['jakosc'].'</p>';                  
+                        }
+                        else
+                        {
+                                echo '<hr/><p>Przepraszamy, podany rekord nie istnieje!</p>';
+                        }
+                        $stmt -> closeCursor();
+                }
+        }
+        catch(PDOException $e)
+        {
+                echo 'Wystapil blad biblioteki PDO: ' . $e->getMessage();
+        }
+?>
+Opis:
+Oczywiście wyświetlanie szczegółów przeprowadzamy tylko, jeśli podaliśmy ID.
+Przygotowujemy szkielet zapytania SELECT.
+Wykonujemy zapytanie metodą execute(). Zauważmy, że obiektem $stmt dysponujemy już od momentu wywołania metody prepare(), dlatego execute() nam już nic tu nie zwraca.
+Dalej postępujemy już tradycyjnie, po prostu pobierając kolejne rekordy (w tym wypadku tylko jeden) i zamykając kursor.
+Jedyną wadą podpinania jest wydłużenie kodu PHP. Jeśli dotychczas wysyłaliśmy zapytanie DELETE zwyczajnie wykonując metodę exec(), teraz musimy to rozpisać na kilka linijek. Jednak jeszcze w tym rozdziale poznamy nakładkę na PDO zwaną Open Power Driver, dzięki której kod z powrotem stanie się krótki i czytelny.
+Uwaga! Biblioteka PDO działa nieco inaczej na wersjach MySQL 5.0 i 4.1 także w przypadku podpinania. Wersja 5.0 jest bardziej elastyczna, jeśli chodzi o konwersję typów i nic jej nie zaszkodzi, kiedy spróbujemy wstawić do pola TINYINT(1) wartość oznaczoną w skrypcie jako PDO::PARAM_BOOL. Na MySQL 4.1 takie zapytanie nie zostanie wykonane, a ponadto serwer DB nie wygeneruje żadnego ostrzeżenia czy komunikatu.
+Ćwiczenie: Zaprogramować formularz do edycji danych produktów z wykorzystaniem podpinania. Skrypt musi wczytywać do formularza dane edytowanego produktu oraz po jego wysłaniu, zmodyfikować wskazany rekord zapytaniem UPDATE. Pamiętaj: wraz z wysłanym formularzem musisz przesłać także ID rekordu, który modyfikujesz!
+Obsługa relacji[edytuj]
+Potrafimy już pobierać wyniki pojedynczego zapytania, potrafimy też wewnątrz jednego zapytania tworzyć relacje. Przejdźmy się jednak do naszej bazy danych księgarni i załóżmy, że chcemy wyświetlić listę kategorii oraz znajdujące się w każdej z nich książki. Sporo początkujących programistów podchodziło do tego zadania z marszu: wysyłali zapytanie żądające pobrania listy kategorii, a następnie w pętli kolejne, które dla aktualnej kategorii pobierało książki. Od razu przestrzegamy przed takim sposobem myślenia! Łamie on podstawową zasadę pracy z bazami danych mówiącą, że generalnie im mniej zapytań, tym lepiej. Ilość wysyłanych zapytań musi być względnie stała i poważnym błędem jest dopuszczenie do sytuacji, gdy zależy ona wprost proporcjonalnie od ilości pobieranych danych. PHP Data Objects (PDO) niejako wymusza rezygnację z tej techniki, ponieważ wspominaliśmy, że nie można wysłać innego zapytania, kiedy nie skończyliśmy pobierać wyników jednego i nie zamknęliśmy jego kursora. Jak więc zatem poradzić sobie z tym zadaniem? Jest to bardzo proste - nasz skrypt będzie bez względu na ilość kategorii wykonywać dwa zapytania, których wynik będzie ładowany do tablicy. Dopiero z niej będzie wyświetlany kod HTML.
+<?php
+ 
+        try
+        {
+                $pdo = new PDO('mysql:host=localhost;dbname=produkty;port=3305', 'root', 'root');
+                $pdo -> setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+ 
+                $stmt = $pdo -> query('SELECT id, nazwa FROM kategorie ORDER BY id');
+ 
+                $wynik = array();
+                while($row = $stmt -> fetch())
+                {
+                        $wynik[$row['id']] = array( // 1
+                                'nazwa' => $row['nazwa'],
+                                'ksiazki' => array() // 2               
+                        );
+                }
+                $stmt -> closeCursor();
+ 
+                $stmt = $pdo -> query('SELECT nazwa, wydawnictwo, kategoria_id
+                        FROM ksiazki ORDER BY kategoria_id, id'); // 3
+ 
+                while($row = $stmt -> fetch())
+                {
+                        $wynik[$row['kategoria_id']]['ksiazki'][] = array( // 4
+                                'nazwa' => $row['nazwa'],
+                                'wydawnictwo' => $row['wydawnictwo']                    
+                        );
+                }
+                $stmt -> closeCursor();
+ 
+                // 5
+                foreach($wynik as &$kategoria)
+                {
+                        echo '<h3>'.$kategoria['nazwa'].'</h3>';
+                        foreach($kategoria['ksiazki'] as &$ksiazka)
+                        {
+                                echo '<p><i>'.$ksiazka['nazwa'].'</i>
+                                (Wyd. '.$ksiazka['wydawnictwo'].')</p>';                        
+                        }
+                }
+        }
+        catch(PDOException $e)
+        {
+                echo 'Wystapil blad biblioteki PDO: ' . $e->getMessage();
+        }
+?>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function  addImages($id,$nam) {
+
+$dir=$_SERVER['DOCUMENT_ROOT'].'/strona/opp/opp/opp/images/';
+ 
+
+ $y=$nam['name']; 
+ $x=$nam['tmp_name']; 
+ 
+ 
+ 
+ if (move_uploaded_file($x,$dir.$y)==true) {
+ 
+  $result=$dir.$y;
+ 
+  mysql_query("INSERT INTO `webstart`(`id`,`image_url`)VALUES('$id','$result') ");
+         echo "dodano nowy plik";
+ 
+  $wynik=mysql_query("SELECT *FROM webstart WHERE id='$id'");
+   
+   while (mysql_fetch_assoc($wynik)) {
+   echo $wynik['image_url'];
+   
+ }
+ 
+ }
+ else 
+ 
+ {
+ echo "blad wysylania";
+ }
+ 
+}
+
+
+
+
+
+
+
+

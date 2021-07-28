@@ -1,0 +1,126 @@
+SQL troszkê bardziej zaawansowany (relacje jeden do wielu, optymalizacja zapytañ)
+
+Jacek | 2011-02-19 01:01:41
+
+Zajmiemy siê podstawowymi (i nie tylko) funkcjami w bazie MySQL, których jeszcze nie opisa³em. Zacznijmy od utworzenia tabeli:
+Tworzenie tabeli
+
+CREATE TABLE `uzytkownicy` (
+   `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+   `imie` VARCHAR(255) NOT NULL,
+   `nazwisko` VARCHAR(255) NOT NULL 
+)
+Od razu mo¿na zauwa¿yæ kilka elementów, które nie pojawi³y siê w poprzednim artykule.
+NOT NULL = nie puste
+
+Dodanie NOT NULL sprawia, ¿e przy dodawaniu rekordu (INSERT) musimy to pole wype³niæ i nie mo¿emy go pomin¹æ. Mo¿na za to uzupe³niæ je wartoœci¹ pust¹: '', ale nie "wartoœci¹" NULL.
+AUTO_INCREMENT = automatyczna numeracja rekordów
+
+Pomimo ustawienia NOT NULL, jeœli pominiemy to pole, baza MySQL automatycznie wstawi tu nastêpny wolny numer, pocz¹wszy od 1.
+PRIMARY KEY = indeks
+
+Tutaj zaczynaj¹ siê ciekawsze funkcje bazy danych - indeksy. Bardzo dobrym porównaniem jest spis treœci w ksi¹¿ce. Aby dotrzeæ do danych MySQL nie musi przechodziæ przez wszystkie strony, a tylko sprawdziæ w indeksie, na której stronie znajduje siê szukana wartoœæ. Indeks PRIMARY KEY oznacza, ¿e wybrana wartoœæ, w tym przypadku pole id, jednoznacznie wskazuje na konkretny rekord. Poniewa¿ indeks ten jest unikalny, dwa rekordy nie mog¹ mieæ identycznego identyfikatora. W danej tabeli nie mo¿e byæ te¿ dwóch indeksów PRIMARY.
+Istniej¹ te¿ inne typy indeksów:
+UNIQUE
+podobny do PRIMARY KEY, jednak mo¿e istnieæ wiêcej ni¿ jeden indeks UNIQUE
+INDEX
+najprostszy indeks. Stara siê zapamiêtaæ kolejnoœæ rekordów wed³ug danego pola (przydatne do sortowania - patrz dalej).
+FULLTEXT
+ten typ indeksu zapamiêtuje, w których rekordach znajduj¹ siê poszczególne ca³e s³owa.
+Na potrzeby tego artyku³u potrzebna bêdzie jeszcze jedna tabela:
+CREATE TABLE `adresy` (
+   `uzytkownik` INT NOT NULL,
+   `adres` VARCHAR(255) NOT NULL,
+   `kod` CHAR(6) NOT NULL,
+   `miasto` VARCHAR(255) NOT NULL,
+   INDEX (`uzytkownik`),
+   INDEX (`miasto`, `uzytkownik`)
+)
+I kolejne dodatkowe informacje:
+CHAR(n) - sta³a liczba znaków
+
+VARCHAR(n) pozwala na przechowywanie zmiennej liczby znaków, ale nie wiêcej ni¿ n. CHAR(n) zawsze przechowuje dok³adnie n znaków. Jeœli podamy ich mniej, to baza dope³ni wartoœæ zerami (dok³adniej znakiem NUL). Przy zwracaniu wartoœci dodane zera s¹ usuwane.
+INDEX (`uzytkownik`) - te¿ indeks
+
+Sk³adnia INDEX (`nazwa_pola`) to po prostu inny sposób zapisu indeksu. W pierwszym przyk³adzie usuwaj¹c PRIMARY KEY z drugiej linii i dodaj¹c po:
+`nazwisko` VARCHAR(255) NOT NULL
+przecinek, a po nim (najlepiej w nowej linii):
+PRIMARY KEY (`id`)
+uzyskalibyœmy identyczn¹ tabelê.
+Istnieje mo¿liwoœæ tworzenia indeksu dla wiêcej ni¿ jednego pola. W tym wypadku musimy skorzystaæ z tej w³aœnie sk³adni:
+INDEX (`pole1`, `pole2`)
+Indeks taki zachowuje siê tak, jakby indeksowa³ jedno pole, które sk³ada siê z po³¹czonych w podanej kolejnoœci wartoœci wskazanych pól.
+Dodwanie danych
+
+Tu ju¿ bez niespodzianek:
+INSERT INTO `uzytkownicy`
+   (`imie`, `nazwisko`)
+VALUES
+   ('Jan', 'Kowalski'),
+   ('Adam', 'Nowak');
+Tabela wygl¹da teraz tak:
+SELECT * FROM `uzytkownicy`
+/----------------------\
+| id | imie | nazwisko |
+|----|------|----------|
+|  1 | Jan  | Kowalski |
+|  2 | Adam | Nowak    |
+\----------------------/
+Jeszcze trochê danych:
+INSERT INTO `adresy`
+   (`uzytkownik`, `adres`, `kod`, `miasto`)
+VALUES
+   ('1', 'Akacjowa 100', '28-133', 'Pacanów'),
+   ('1', 'Bajkowa 6', '29-100', 'W³oszczowa'),
+   ('1', 'Cicha 18', '14-530', 'Frombork'),
+   ('2', 'Jasna 21', '29-100', 'W³oszczowa');
+ 
+
+Zajmiemy siê jedn¹ z relacji - jeden do wielu. Jeden u¿ytkownik mo¿e mieæ kilka adresów, jednak ka¿dy adres nale¿y do jednego, konkretnego u¿ytkownika. Spróbujmy wykorzystaæ dane z bazy:
+Imiona i nazwiska u¿ytkowników mieszkaj¹cych we W³oszczowie:
+
+SELECT imie, nazwisko
+   FROM uzytkownicy
+   LEFT JOIN adresy
+      ON (`uzytkownicy`.`id` = `adresy`.`uzytkownik`)
+   WHERE `miasto` = 'W³oszczowa'
+Poproszê o imiê i nazwisko (SELECT imie, nazwisko) z tabeli u¿ytkownicy (FROM uzytkownicy). Proszê do³¹czyæ tabelê adresy (LEFT JOIN adresy) tak, by pole `id` by³o równe polu `uzytkownik` (ON (warunki)). A teraz chcê tylko rekordy z `miasto` = 'W³oszczowa' (WHERE ...).
+Tak zapytanie wygl¹da. MySQL dokonuje kilku sztuczek z indeksami, by zapytanie by³o wykonywane optymalniej i szybciej:
+WHERE jest wa¿niejsze, wiêc zacznê od tabeli `adresy`.
+Mam indeks z polami `miasto` i `uzytkownik` oraz indeks z samym polem `uzytkownik`.
+Indeks (`miasto`, `uzytkownik`) jest lepszy. Poszukajmy w nim ci¹gu zaczynaj¹cego siê od 'W³oszczowa'.
+Mam dwa rekordy z `uzytkownik`='1' i `uzytkownik`='2'
+Zajmijmy siê drug¹ czêœci¹ zapytania.
+W tabeli `uzytkownicy` mam indeks wed³ug pola `id`. Poszukam w nim 1 i 2.
+Odczytam rekordy, które wskaza³ indeks. Gotowe.
+W celu sprawdzenia, czy MySQL zachowuje siê tak jak chcemy i korzysta z indeksów, co jest szczególnie wa¿ne przy du¿ej iloœci danych, wykonujemy zapytanie:
+EXPLAIN SELECT imie, nazwisko
+   FROM uzytkownicy
+   LEFT JOIN adresy
+      ON (`uzytkownicy`.`id` = `adresy`.`uzytkownik`)
+   WHERE `miasto` = 'W³oszczowa'
+Zwróci ono tak¹ "tabelkê" z wynikiem:
+id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	adresy	ref	uzytkownik,miasto	miasto	257	const	2	Using where; Using index
+1	SIMPLE	uzytkownicy	eq_ref	PRIMARY	PRIMARY	4	test.adresy.uzytkownik	1	
+Wiemy ile "prostych" zapytañ wykona³ MySQL (2), jakich indeksów próbowa³ u¿yæ (s¹ to nazwy - zobacz np. w phpMyAdmin), i czy faktycznie ich u¿y³ (œwiadczy o tym tekst "Using index" w sekcji Extra).
+EXPLAIN to bardzo u¿yteczne narzêdzie do optymalizowania zapytañ. Dok³adne informacje na temat zwracanych wartoœci dostêpne s¹ w dokumentacji bazy MySQL.
+Kelner, jeszcze raz to samo...
+
+SELECT imie, nazwisko
+   FROM adresy, uzytkownicy
+   WHERE `uzytkownicy`.`id` = `adresy`.`uzytkownik`
+      AND `miasto` = 'W³oszczowa'
+Tak! Powy¿sze zapytanie zachowa siê tak samo jak opisany powy¿ej LEFT JOIN.
+Jesze jeden przyk³ad:
+SELECT imie, nazwisko
+   FROM uzytkownicy
+   WHERE `id` IN (
+      SELECT `uzytkownik`
+      FROM adresy
+      WHERE `miasto` = 'W³oszczowa'
+   )
+Trzeba jednak zauwa¿yæ (EXPLAIN), ¿e zapytanie to nie bêdzie optymalne i (najprawdopodobniej) MySQL przeszuka ca³¹ tablicê uzytkownicy.
+Epilog
+
+O bazach danych i SQL mo¿na pisaæ d³ugo - istnieje wiêc niezerowe prawdopodobieñstwo, ¿e pojawi siê kolejna czêœæ artyku³u. Niecierpliwych odsy³am do przepastnej dokumentacji: SELECT, JOIN, optymalizowanie zapytañ SELECT.

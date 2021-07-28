@@ -1,0 +1,59 @@
+ 
+<?php
+//£¥CZYMY SIÊ Z BAZ¥ DANYCH
+$link=mysql_connect('localhost','root','') //³¹czymy siê z baz¹ danych
+or die('Po³¹czenie nieudane'); //w razie komplikacji wyœwietlamy komunikat
+
+mysql_query('use sample') //wybieramy bazê
+or die('Nieudane pobranie bazy'); //jak b³¹d, to komunikacik
+
+//SPRAWDZAMY, CZY JEST POKAZANY NUMER ZDJÊCIA, KTÓRE CHCEMY OBEJRZEÆ
+if(!isset($_GET['zdj'])) //jeœli nie jest zdefiniowane zdjêcie, które mamy pokazaæ...
+{
+$zapytanie=mysql_query("SELECT * FROM galeria LIMIT 1");//...to pobierz dane o pierwszym zdjêciu z tabeli
+}
+else
+{
+$zdj=$_GET['zdj'];
+$zapytanie=mysql_query("SELECT * FROM galeria WHERE id='$zdj'");//...w przeciwnym wypadku poka¿ dane zdefiniowanego zdjêcia
+}
+
+//I WYŒWIETLAMY TABELKÊ (NA RAZIE 1 WIERSZ)
+
+echo '<table>'; //wyœwietlamy tabelkê
+echo '<tr border="0">';
+echo '<td colspan="3" align=”center”>';
+
+
+$dane=mysql_fetch_array($zapytanie); //przekszta³æ zapytanie w tablicê
+
+echo '<img src=galeria/'.$dane['zdjecie'].' width=400>'; //wyœwietl zdjêcie
+echo '<br>'; //enterek
+echo '<b>'.$dane['opis'].'</b>'; //i opis do zdjêcia
+echo '</td></tr>'; //zamknij komórkê i wiersz
+
+//A TERAZ POZOSTA£E WIERSZE (PO 3 KOMÓRKI W WIERSZU)
+
+$zapyanie=mysql_query('SELECT * FROM galeria'); //znowu pobieramy wszystko z bazy
+$il=mysql_num_rows($zapyanie); //sprawdzamy ile w tabeli jest zdjêæ
+$wiersze=ceil($il/3); //i dzielimy to przez 3, z nadmiarem
+
+for ($a=0;$a<$wiersze;$a++) //otwieramy pêtlê, bêdzie siê robi³a tyle razy, ile jest wierszy
+{
+echo '<tr align=center>'; //wyœwietlamy nowy wiersz
+$b=$a*3; //bêd¹ pobierane z tabeli po 3 zdjêcia
+$zapytanie="SELECT * FROM galeria LIMIT $b,3"; //zapytanie
+$a=mysql_query($zapytanie); //pobieramy po 3 zdjêcia
+while($row=mysql_fetch_array($a))
+{
+echo '<td>'; //otwieramy now¹ komórkê
+echo '<a href=galeria.php?zdj='.$row['id'].'><img src="galeria/'.$row['zdjecie'].'" border=0 width=100></a>'; //hiper³¹cze do zdjêcia + zdjêcie
+echo '</td>'; //zamykamy komórkê
+}
+
+echo '</tr>'; //zamykamy wiersz
+}
+echo '</table>'; //zamykamy tabelê
+
+mysql_close($link); //zamykamy po³¹czenie z baz¹ danych
+?> 
